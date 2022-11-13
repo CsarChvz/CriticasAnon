@@ -39,8 +39,9 @@ def posts(count=100):
     user_count = User.query.count()
     profile_count = Profile.query.count()
     for i in range(count):
+        # Tenemos que 
         u = User.query.offset(randint(0, user_count - 1)).first()
-        pr = Profile.query.offset(randint(0, randint - 1)).first()
-        p = Post(body=fake.text(), timestamp=fake.past_date(), author=u, profile=pr)
+        pr = Profile.query.offset(randint(0, profile_count - 1)).first()
+        p = Post(body=fake.text(), timestamp=fake.past_date(), user_id=u.id, profile_id=pr.id)
         db.session.add(p)
     db.session.commit()
