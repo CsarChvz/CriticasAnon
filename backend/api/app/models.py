@@ -81,8 +81,8 @@ class User(db.Model):
     confirmed = db.Column(db.Boolean, default=False)
     avatar_hash = db.Column(db.String(32))
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
-    profile = db.relationship('Profile', backref='role', lazy='dynamic')
-    post = db.relationship('Post', backref='role', lazy='dynamic')
+    profile = db.relationship('Profile', backref='users', lazy='dynamic')
+    post = db.relationship('Post', backref='users', lazy='dynamic')
 
 
     def __init__(self, **kwargs):
@@ -181,23 +181,18 @@ class Profile(db.Model):
     about_me = db.Column(db.Text())
     member_since = db.Column(db.DateTime(), default=datetime.utcnow)
     last_seen = db.Column(db.DateTime(), default=datetime.utcnow)
-    post = db.relationship('Post', backref='role', lazy='dynamic')
+    post = db.relationship('Post', backref='profile', lazy='dynamic')
 
     def __init__(self, **kwargs):
         super(Profile, self).__init__(**kwargs)
-        if self.user_id is None:
-            self.user_id = current_user.id
 
-    def create(self):
-        db.session.add(self)
-        db.session.commit()
-        return self
+        
 
     def __repr__(self):
         return '<Profile %r>' % self.first_name
 
 class Post(db.Model):
-    __tablename__ = 'posts'
+    __tablename__ = 'post'
     id = db.Column(db.Integer, primary_key=True)
     body = db.Column(db.Text)
     timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
