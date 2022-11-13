@@ -3,8 +3,10 @@ from passlib.hash import pbkdf2_sha256 as sha256
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin, AnonymousUserMixin, current_user
 from itsdangerous import Serializer
-from flask import current_app
+from flask import current_app, request
 from datetime import datetime
+import hashlib
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -17,8 +19,7 @@ class Role(UserMixin, db.Model):
     default = db.Column(db.Boolean, default=False, index=True)
     permissions = db.Column(db.Integer)
     users = db.relationship('User', backref='role')
-    profile = db.relationship('Profile', backref='role', lazy='dynamic')
-    
+
     def __init__(self, **kwargs):
         super(Role, self).__init__(**kwargs)
         if self.permissions is None:
@@ -78,7 +79,11 @@ class User(db.Model):
     email = db.Column(db.String(64), unique=True, index=True)
     password_hash = db.Column(db.String(128), nullable=False)
     confirmed = db.Column(db.Boolean, default=False)
+    avatar_hash = db.Column(db.String(32))
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
+    profile = db.relationship('Profile', backref='role', lazy='dynamic')
+    post = db.relationship('Post', backref='role', lazy='dynamic')
+
 
     def __init__(self, **kwargs):
         super(User, self).__init__(**kwargs)
@@ -87,6 +92,27 @@ class User(db.Model):
                 self.role = Role.query.filter_by(name='Administrator').first()
             if self.role is None:
                 self.role = Role.query.filter_by(default=True).first()
+
+        if self.email is not None and self.avatar_hash is None:
+            self.avatar_hash = hashlib.md5(
+                self.email.lower().encode('utf-8')).hexdigest()
+
+    def change_email(self, token):
+        s = Serializer(current_app.config['SECRET_KEY'])
+        try:
+            data = s.loads(token)
+        except:
+            return False
+        if data.get('change_email') != self.id:
+            return False
+        self.email = data.get('new_email')
+        self.avatar_hash = hashlib.md5(
+            self.email.lower().encode('utf-8')).hexdigest()
+        db.session.add(self)
+        return True
+
+    def gravatar_hash(self):
+        return hashlib.md5(self.email.lower().encode('utf-8')).hexdigest()
 
     def create(self):
         db.session.add(self)
@@ -129,6 +155,13 @@ class User(db.Model):
     def is_administrator(self):
         return self.can(Permission.ADMIN)
 
+    def gravatar(self, size=100, default='identicon', rating='g'):
+        url = 'https://secure.gravatar.com/avatar'
+        hash = hashlib.md5(self.email.lower().encode('utf-8')).hexdigest()
+        return '{url}/{hash}?s={size}&d={default}&r={rating}'.format(
+            url=url, hash=hash, size=size, default=default, rating=rating)
+
+
 class AnonymousUser(AnonymousUserMixin):
     def can(self, permissions):
         return False
@@ -148,6 +181,7 @@ class Profile(db.Model):
     about_me = db.Column(db.Text())
     member_since = db.Column(db.DateTime(), default=datetime.utcnow)
     last_seen = db.Column(db.DateTime(), default=datetime.utcnow)
+    post = db.relationship('Post', backref='role', lazy='dynamic')
 
     def __init__(self, **kwargs):
         super(Profile, self).__init__(**kwargs)
@@ -161,3 +195,14 @@ class Profile(db.Model):
 
     def __repr__(self):
         return '<Profile %r>' % self.first_name
+
+class Post(db.Model):
+    __tablename__ = 'posts'
+    id = db.Column(db.Integer, primary_key=True)
+    body = db.Column(db.Text)
+    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    profile_id = db.Column(db.Integer, db.ForeignKey('profiles.id'))
+
+    def __repr__(self):
+        return '<Post %r>' % self.body

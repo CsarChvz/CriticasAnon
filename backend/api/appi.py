@@ -2,10 +2,11 @@ import os
 from app import create_app, db
 from app.models import User, Role, Permission
 from flask_migrate import Migrate, upgrade
-
+from flask_cors import CORS
 
 app = create_app(os.getenv('FLASK_CONFIG') or 'default')
 migrate = Migrate(app, db)
+CORS(app)
 
 @app.shell_context_processor
 def make_shell_context():
